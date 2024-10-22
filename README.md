@@ -1,6 +1,6 @@
-# Music harmonizer
+# Music Harmonizer - A Deep Learning Approach To Adding Chords To Melodies
 
-## Introduction and motivation
+## Introduction and Motivation
 
 Melody harmonization is a large part of many composers' workflows. While melodies can stand on their own and sound beautiful, it's harmonies that give them character, context, and depth. Choosing harmonies is an artist's creative choice, however, creativity alone is not always enough. The process requires a good understanding of music theory and, often, a lot of trial and error, which can overwhelm composers, both novice and experienced. 
 This opens the need for tools that can help with music harmonization.
@@ -9,7 +9,7 @@ The motivation behind creating such a tool isn't replacing composers -- harmoniz
 
 This project is done as part of the Applied Deep Learning (194.077) course at the Vienna University of Technology.
 
-## Project description and approach
+## Project Description and Approach
 
 The goal of this project is to create a deep learning system that will be able to add chords to accompany melodic lines. For more information about the process of harmonization in general, please refer to this article: [Harmonization](https://en.wikipedia.org/wiki/Harmonization).
 
@@ -17,7 +17,7 @@ Many approaches to this problem generate the harmonies note-by-note, one for eac
 
 Type of project: **Bring your own method**.
 
-## Previous work - related scientific papers
+## Previous Work - Related Scientific Papers
 
 Arguably the most famous paper in automated music harmonization is [_DeepBach: a Steerable Model for Bach Chorales Generation_ by Gaëtan Hadjeres, François Pachet, and Frank Nielsen](https://arxiv.org/pdf/1612.01010.pdf). To train the model, they used a dataset of J.S. Bach's chorales. Their input was the soprano voice of the chorale (the highest voice), and the model returned notes of the remaining three voices (alto, tenor, and bass). Their model consists of two deep relational neural networks and two regular artificial neural networks, combined into an architecture shown in the figure below. The model used music that came both before and after the note it was generating, which helped it understand musical context better.
 
@@ -37,7 +37,7 @@ For the model training, the [_Beethoven Piano Sonata with Function Harmony (BPS-
 
 In case this dataset proves not to be sufficient for training such a model, other datasets will be tested, such as the [_Jazz Audio-Aligned Harmony (JAAH) Dataset_](https://mtg.github.io/JAAH/), which contains 113 Jazz tracks with 17600 chord segments, and the [_ChoCo Dataset_](https://github.com/smashub/choco), which provides a unified dataset of over 20,000 timed chord annotations of scores, gathered from 18 different datasets.
 
-## Work breakdown structure
+## Work Breakdown Structure
 
 1. Dataset preparation and preprocessing - 5 hours
     - This part includes acquiring the dataset, analyzing the data, and doing the necessary preprocessing to make it usable in deep learning models.
