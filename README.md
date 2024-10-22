@@ -1,4 +1,4 @@
-# Music Harmonizer - A Deep Learning Approach To Adding Chords To Melodies
+# Music Harmonizer - A Deep Learning Approach to Adding Chords to Melodies
 
 ## Introduction and Motivation
 
