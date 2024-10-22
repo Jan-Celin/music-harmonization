@@ -25,7 +25,7 @@ Arguably the most famous paper in automated music harmonization is [_DeepBach: a
 <img src="https://github.com/user-attachments/assets/6128cb18-e257-4d43-8764-afefbf46dcc5" alt="DeepBach model architecture" width="400"/>
 </p>
 
-Another paper that deals with melody harmonization is [_Translating Melody to Chord: Structured and Flexible Harmonization of Melody With Transformer_ by Seungyeon Rhyu, Hyeonseok Choi, Sarah Kim, and Kyogu Lee](https://ieeexplore.ieee.org/abstract/document/9723052). As part of the study, three models were created: a standard transformer, a variational transformer, and a regularized variational Transformer. According to the study results, the models performed similar to humans in subjective evaluations given by 32 participants in four metrics: harmonicity, unexpectedness, complexity, and preference.
+Another paper that deals with melody harmonization is [_Translating Melody to Chord: Structured and Flexible Harmonization of Melody With Transformer_ by Seungyeon Rhyu, Hyeonseok Choi, Sarah Kim, and Kyogu Lee](https://ieeexplore.ieee.org/abstract/document/9723052). As part of the study, three models were created: a standard transformer, a variational transformer, and a regularized variational Transformer. According to the study results, the models performed similarly to humans in subjective evaluations given by 32 participants in four metrics: harmonicity, unexpectedness, complexity, and preference.
 
 ## Dataset
 
@@ -35,12 +35,12 @@ In case this dataset proves not to be sufficient for training such a model, othe
 
 ## Work breakdown structure
 
-1. Dataset preparation an preprocessing - 5 hours
+1. Dataset preparation and preprocessing - 5 hours
     - This part includes acquiring the dataset, analyzing the data, and doing the necessary preprocessing to make it usable in deep learning models.
 2. Model design and selection - 20 hours
-    - This is an iterative process in which different model architectures will be tested and evaluated. After an analysis of the different designs one of the models will be chosen for fine-tuning.
+    - This is an iterative process in which different model architectures will be tested and evaluated. After an analysis of the different designs, one of the models will be chosen for fine-tuning.
 3. Model training and fine-tuning - 10 hours
-    - During this step, the selected architecture will be trained on the data and the model hyperparameters will be fine-tuned. The result will be a trained model acompanied by performance metrics gathered from the test dataset.
+    - During this step, the selected architecture will be trained on the data and the model hyperparameters will be fine-tuned. The result will be a trained model accompanied by performance metrics gathered from the test dataset.
 4. Building an application to present the results - 10 hours
     - An interactive application will be created, allowing users to input their own melodies and receive the harmonized version.
 5. Writing the final report - 6 hours
