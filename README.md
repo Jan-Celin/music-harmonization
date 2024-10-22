@@ -21,7 +21,7 @@ Type of project: **Bring your own method**.
 
 ## Previous Work - Related Scientific Papers
 
-Arguably the most famous paper in automated music harmonization is [_DeepBach: a Steerable Model for Bach Chorales Generation_ by Gaëtan Hadjeres, François Pachet, and Frank Nielsen](https://arxiv.org/pdf/1612.01010.pdf). To train the model, they used a dataset of J.S. Bach's chorales. The model's input is the soprano voice of the chorale (the highest voice), and the model returns notes of the remaining three voices (alto, tenor, and bass). Their architecture consists of two deep relational neural networks and two regular artificial neural networks, combined as shown in the figure below. The model uses music that comes both before and after the note it is generating, which helps it understand musical context better.
+Arguably the most famous paper in automated music harmonization is [_DeepBach: a Steerable Model for Bach Chorales Generation_ by Gaëtan Hadjeres, François Pachet, and Frank Nielsen](https://arxiv.org/pdf/1612.01010.pdf). To train the model, they used a dataset of J.S. Bach's chorales. The model's input is one of the chorale's voices (soprano, alto, tenor, or bass), and the model returns notes of the remaining voices. Their architecture consists of two deep relational neural networks and two regular artificial neural networks, combined as shown in the figure below. The model uses music that comes both before and after the note it is generating, which helps it understand musical context better.
 
 <p align="center">
 <img src="https://github.com/user-attachments/assets/6128cb18-e257-4d43-8764-afefbf46dcc5" alt="DeepBach model architecture" width="400"/>
