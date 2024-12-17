@@ -4,11 +4,16 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import Transformer
+from torch.utils.data import Dataset, DataLoader
+import torch.optim as optim
+from torch.nn.utils.rnn import pad_sequence
+
+from tqdm import tqdm
 
 import os
 import math
 
-from ProcessDataset import chord_key_to_int, scale_degree_to_int, chord_quality_to_int, process_dataset
+from ProcessDataset import chord_key_to_int, scale_degree_to_int, chord_quality_to_int, process_dataset, prepare_dataset
 
 
 midi_vocab_size = 128
@@ -38,6 +43,38 @@ class SinusoidalPositionalEncoding(nn.Module):
         embeddings[:, :, 1::2] = torch.cos(positions * div_term)
 
         return embeddings
+
+
+class SonataDataset(Dataset):
+    def __init__(self, data):
+        self.data = data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, i):
+        return self.data[i]
+
+
+def collate_fn(batch):
+    src_notes = [item['src_notes'] for item in batch]
+    src_onsets = [item['src_onsets'] for item in batch]
+    tgt_chords = [item['tgt_chords'] for item in batch]
+    tgt_onsets = [item['tgt_onsets'] for item in batch]
+
+    # Pad sequences to the same length in each batch
+    src_notes_padded = pad_sequence(src_notes, batch_first=True, padding_value=0)
+    src_onsets_padded = pad_sequence(src_onsets, batch_first=True, padding_value=0)
+    tgt_chords_padded = pad_sequence(tgt_chords, batch_first=True, padding_value=0)
+    tgt_onsets_padded = pad_sequence(tgt_onsets, batch_first=True, padding_value=0)
+
+    return {
+        'src_notes': src_notes_padded,
+        'src_onsets': src_onsets_padded,
+        'tgt_chords': tgt_chords_padded,
+        'tgt_onsets': tgt_onsets_padded
+    }
+
 
 class HarmonizerTransformer(nn.Module):
     def __init__(self, 
@@ -119,35 +156,197 @@ class HarmonizerTransformer(nn.Module):
         return key, degree, quality, inversion
 
 
+def train_model(model, dataloader, chord_vocab_sizes, num_epochs=10, learning_rate=0.001, device='cuda'):
+    model = model.to(device)
+
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+    # Define loss functions for each output head
+    criterion = nn.CrossEntropyLoss()
+
+    # Training loop
+    for epoch in range(num_epochs):
+        model.train()
+        epoch_loss = 0
+
+        for batch in tqdm(dataloader, desc=f"Epoch {epoch + 1}/{num_epochs}"):
+            src_notes = batch['src_notes'].to(device)
+            src_onsets = batch['src_onsets'].to(device)
+            tgt_chords = batch['tgt_chords'].to(device)
+            tgt_onsets = batch['tgt_onsets'].to(device)
+
+            tgt_key = tgt_chords[:, :, 0]
+            tgt_degree = tgt_chords[:, :, 1]
+            tgt_quality = tgt_chords[:, :, 2]
+            tgt_inversion = tgt_chords[:, :, 3]
+
+            # Forward pass
+            key_pred, degree_pred, quality_pred, inversion_pred = model(src_notes, src_onsets, tgt_chords, tgt_onsets)
+
+            # Reshape predictions and targets to compute the loss
+            key_pred = key_pred.view(-1, chord_vocab_sizes['key'])  # (batch_size * seq_len, vocab_size)
+            degree_pred = degree_pred.view(-1, chord_vocab_sizes['degree'])
+            quality_pred = quality_pred.view(-1, chord_vocab_sizes['quality'])
+            inversion_pred = inversion_pred.view(-1, chord_vocab_sizes['inversion'])
+
+            tgt_key = tgt_key.view(-1)  # (batch_size * seq_len)
+            tgt_degree = tgt_degree.view(-1)
+            tgt_quality = tgt_quality.view(-1)
+            tgt_inversion = tgt_inversion.view(-1)
+
+            # Compute the loss for each output head
+            loss_key = criterion(key_pred, tgt_key)
+            loss_degree = criterion(degree_pred, tgt_degree)
+            loss_quality = criterion(quality_pred, tgt_quality)
+            loss_inversion = criterion(inversion_pred, tgt_inversion)
+
+            total_loss = loss_key + loss_degree + loss_quality + loss_inversion
+
+            # Backward pass
+            optimizer.zero_grad()
+            total_loss.backward()
+            optimizer.step()
+
+            epoch_loss += total_loss.item()
+
+        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss / len(dataloader)}")
+
+    return model
+
+def test_model(model, dataloader, chord_vocab_sizes):
+    model.eval()
+    correct_predictions = 0
+    total_predictions = 0
+
+    for batch in tqdm(dataloader, desc="Testing"):
+        src_notes = batch['src_notes'].to("cuda" if torch.cuda.is_available() else "cpu")
+        src_onsets = batch['src_onsets'].to("cuda" if torch.cuda.is_available() else "cpu")
+        tgt_chords = batch['tgt_chords'].to("cuda" if torch.cuda.is_available() else "cpu")
+        tgt_onsets = batch['tgt_onsets'].to("cuda" if torch.cuda.is_available() else "cpu")
+
+        tgt_key = tgt_chords[:, :, 0]
+        tgt_degree = tgt_chords[:, :, 1]
+        tgt_quality = tgt_chords[:, :, 2]
+        tgt_inversion = tgt_chords[:, :, 3]
+
+        # Forward pass
+        key_pred, degree_pred, quality_pred, inversion_pred = model(src_notes, src_onsets, tgt_chords, tgt_onsets)
+
+        key_pred = key_pred.view(-1, chord_vocab_sizes['key'])  # (batch_size * seq_len, vocab_size)
+        degree_pred = degree_pred.view(-1, chord_vocab_sizes['degree'])
+        quality_pred = quality_pred.view(-1, chord_vocab_sizes['quality'])
+        inversion_pred = inversion_pred.view(-1, chord_vocab_sizes['inversion'])
+
+        tgt_key = tgt_key.view(-1)  # (batch_size * seq_len)
+        tgt_degree = tgt_degree.view(-1)
+        tgt_quality = tgt_quality.view(-1)
+        tgt_inversion = tgt_inversion.view(-1)
+
+        key_pred = torch.argmax(key_pred, dim=-1)
+        degree_pred = torch.argmax(degree_pred, dim=-1)
+        quality_pred = torch.argmax(quality_pred, dim=-1)
+        inversion_pred = torch.argmax(inversion_pred, dim=-1)
+
+        correct_predictions += torch.sum(key_pred == tgt_key).item()
+        correct_predictions += torch.sum(degree_pred == tgt_degree).item()
+        correct_predictions += torch.sum(quality_pred == tgt_quality).item()
+        correct_predictions += torch.sum(inversion_pred == tgt_inversion).item()
+
+        total_predictions += tgt_key.numel() + tgt_degree.numel() + tgt_quality.numel() + tgt_inversion.numel()
+
+    accuracy = correct_predictions / total_predictions
+    return accuracy
+
+
+def hyperparameter_search():
+    # Define the hyperparameters to search
+    hyperparameters = {
+        'd_model': [128, 256, 512],
+        'nhead': [4, 8, 16],
+        'num_encoder_layers': [4, 6, 8],
+        'num_decoder_layers': [4, 6, 8],
+        'learning_rate': [0.01, 0.001, 0.0005, 0.0001, 0.00005]
+    }
+
+    # Load the dataset
+    dataset_path = 'data/processed'
+    train_test_split = 0.8
+    data_train, data_test = prepare_dataset(dataset_path, train_test_split)
+
+    dataset_train = SonataDataset(data_train)
+    dataloader_train = DataLoader(dataset_train, batch_size=8, shuffle=True, collate_fn=collate_fn)
+
+    # Perform the hyperparameter search
+    best_accuracy = 0
+    best_hyperparameters = None
+
+    for d_model in hyperparameters['d_model']:
+        for nhead in hyperparameters['nhead']:
+            for num_encoder_layers in hyperparameters['num_encoder_layers']:
+                for num_decoder_layers in hyperparameters['num_decoder_layers']:
+                    for learning_rate in hyperparameters['learning_rate']:
+                        model = HarmonizerTransformer(midi_vocab_size, chord_vocab_sizes, d_model=d_model, nhead=nhead, num_encoder_layers=num_encoder_layers, num_decoder_layers=num_decoder_layers)
+                        trained_model = train_model(
+                            model=model,
+                            dataloader=dataloader_train,
+                            chord_vocab_sizes=chord_vocab_sizes,
+                            num_epochs=5,
+                            learning_rate=learning_rate,
+                            device="cuda" if torch.cuda.is_available() else "cpu"
+                        )
+
+                        dataset_test = SonataDataset(data_test)
+                        dataloader_test = DataLoader(dataset_test, batch_size=8, shuffle=False, collate_fn=collate_fn)
+
+                        accuracy = test_model(trained_model, dataloader_test, chord_vocab_sizes)
+                        print(f"Hyperparameters: d_model={d_model}, nhead={nhead}, num_encoder_layers={num_encoder_layers}, num_decoder_layers={num_decoder_layers}, learning_rate={learning_rate}, Accuracy={accuracy}")
+
+                        if accuracy > best_accuracy:
+                            best_accuracy = accuracy
+                            best_hyperparameters = {
+                                'd_model': d_model,
+                                'nhead': nhead,
+                                'num_encoder_layers': num_encoder_layers,
+                                'num_decoder_layers': num_decoder_layers,
+                                'learning_rate': learning_rate
+                            }
+
+    return best_hyperparameters, best_accuracy
+
+
 def main():
     model = HarmonizerTransformer(midi_vocab_size, chord_vocab_sizes)
 
-    # Load sample data
-    df_notes = pd.read_csv("data/processed/1/notes.csv")
-    df_chords = pd.read_csv("data/processed/1/chords.csv")
+    # Load the dataset
+    dataset_path = 'data/processed'
+    train_test_split = 0.8
+    data_train, data_test = prepare_dataset(dataset_path, train_test_split)
 
-    # Prepare the input tensors
-    src_notes = torch.tensor(df_notes["midi_note"].tolist(), dtype=torch.long).unsqueeze(0)
-    src_onset_times = torch.tensor(df_notes["onset_time"].tolist(), dtype=torch.long).unsqueeze(0)
+    dataset_train = SonataDataset(data_train)
 
-    # Prepare the target tensors
-    tgt_chords = torch.tensor(df_chords[["key", "degree", "quality", "inversion"]].values).unsqueeze(0)
-    tgt_onset_times = torch.tensor(df_chords["time"].values, dtype=torch.long).unsqueeze(0)
+    # Train the model
+    model = HarmonizerTransformer(midi_vocab_size, chord_vocab_sizes)
+    dataloader_train = DataLoader(dataset_train, batch_size=8, shuffle=True, collate_fn=collate_fn)
 
-    # Forward pass
-    key, degree, quality, inversion = model(src_notes, src_onset_times, tgt_chords, tgt_onset_times)
+    trained_model = train_model(
+        model=model,
+        dataloader=dataloader_train,
+        chord_vocab_sizes=chord_vocab_sizes,
+        num_epochs=5,
+        learning_rate=0.001,
+        device="cuda" if torch.cuda.is_available() else "cpu"
+    )
 
-    # Get the predicted values
-    key_pred = key.argmax(dim=-1)
-    degree_pred = degree.argmax(dim=-1)
-    quality_pred = quality.argmax(dim=-1)
-    inversion_pred = inversion.argmax(dim=-1)
+    # Test the model accuracy
+    dataset_test = SonataDataset(data_test)
+    dataloader_test = DataLoader(dataset_test, batch_size=8, shuffle=False, collate_fn=collate_fn)
 
-    print(key_pred)
-    print(degree_pred)
-    print(quality_pred)
-    print(inversion_pred)
-    
+    accuracy = test_model(trained_model, dataloader_test, chord_vocab_sizes)
+    print(f"Test set accuracy: {accuracy}")
+
+    # Save the model
+    torch.save(trained_model.state_dict(), 'harmonizer_transformer.pth')
+
 
 if __name__ == "__main__":
     main()

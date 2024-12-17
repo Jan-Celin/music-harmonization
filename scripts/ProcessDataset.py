@@ -1,5 +1,7 @@
 import pandas as pd
 import os
+import torch
+import shutil
 
 
 chord_quality_to_int = {
@@ -161,6 +163,61 @@ def process_chords_df(df_chords):
     expanded_df = pd.DataFrame(expanded_rows).reset_index(drop=True)
     return expanded_df
 
+def prepare_dataset(dataset_path, train_test_split=0.8):
+    data_train = []
+    data_test = []
+    num_dirs = len(os.listdir(dataset_path))
+
+    for dir in os.listdir(dataset_path):
+        # Load the data
+        notes_df = pd.read_csv(os.path.join(dataset_path, dir, 'notes.csv'))
+        chords_df = pd.read_csv(os.path.join(dataset_path, dir, 'chords.csv'))
+        phrases_df = pd.read_excel(os.path.join(dataset_path, dir, 'phrases.xlsx'), header=None)
+
+        # Process each phrase
+        for _, phrase in phrases_df.iterrows():
+            phrase_begin = phrase[0]
+            phrase_end = phrase[1]
+
+            # Extract notes and chords within the phrase
+            notes_in_phrase = notes_df[
+                (notes_df['onset_time'] >= phrase_begin) & 
+                (notes_df['onset_time'] <= phrase_end)
+            ]
+            chords_in_phrase = chords_df[
+                (chords_df['time'] >= phrase_begin) & 
+                (chords_df['time'] <= phrase_end)
+            ]
+
+            # Skip empty phrases if there are no notes or chords
+            if notes_in_phrase.empty or chords_in_phrase.empty:
+                continue
+
+            # Convert to tensors
+            src_notes = torch.tensor(notes_in_phrase['midi_note'].values, dtype=torch.long)
+            src_onsets = torch.tensor(notes_in_phrase['onset_time'].values, dtype=torch.float32) - phrase_begin
+
+            tgt_chords = torch.tensor(chords_in_phrase[['key', 'degree', 'quality', 'inversion']].values, dtype=torch.long)
+            tgt_onsets = torch.tensor(chords_in_phrase['time'].values, dtype=torch.float32) - phrase_begin
+
+            # Append to the list
+            if int(dir) <= num_dirs*train_test_split:
+                data_train.append({
+                    'src_notes': src_notes,
+                    'src_onsets': src_onsets,
+                    'tgt_chords': tgt_chords,
+                    'tgt_onsets': tgt_onsets
+                })
+            else:
+                data_test.append({
+                    'src_notes': src_notes,
+                    'src_onsets': src_onsets,
+                    'tgt_chords': tgt_chords,
+                    'tgt_onsets': tgt_onsets
+                })
+    
+    return data_train, data_test
+
 
 def process_dataset(dataset_path):
     for dir in os.listdir(dataset_path):
@@ -179,11 +236,17 @@ def process_dataset(dataset_path):
         df_chords_clean = process_chords_df(df_chords)
         df_chords_clean.to_csv(os.path.join('data/processed/', dir, 'chords.csv'), index=False)
 
+        shutil.copyfile(os.path.join(dataset_path, dir, 'phrases.xlsx'), os.path.join('data/processed/', dir, 'phrases.xlsx'))
+
 
 def main():
     print("Processing dataset started...")
     process_dataset('data/functional-harmony/BPS_FH_Dataset')
     print("Processing dataset completed.")
+
+    data_train, data_test = prepare_dataset('data/processed')
+    print("Number of phrases in the train set:", len(data_train))
+    print("Number of phrases in the test set:", len(data_test))
 
 
 if __name__ == '__main__':
