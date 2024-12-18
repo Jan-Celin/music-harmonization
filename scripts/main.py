@@ -7,7 +7,7 @@ import torch
 import datetime
 
 
-EPOCHS = 1
+EPOCHS = 5
 
 def main():
     print("Processing dataset started...")

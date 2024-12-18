@@ -83,6 +83,17 @@ chord_key_to_int = {
 }
 
 def process_notes_df(df_notes):
+    """
+    Process the notes dataframe. The function gives meaningful names to the dataframe's columns and
+    filters the notes to keep only the note with thehighest pitch played at each onset time.
+
+    Args:
+        df_notes (Pandas.Dataframe): Source notes dataframe.
+
+    Returns:
+        Pandas.Dataframe: Processed notes dataframe.
+    """
+
     # Rename columns to give them meaningful names
     df_notes = df_notes.rename(columns={
         0: 'onset_time',
@@ -111,6 +122,17 @@ def process_notes_df(df_notes):
     return df_notes_clean
 
 def process_chords_df(df_chords):
+    """
+    Process the chords dataframe. The function gives meaningful names to the dataframe's columns and
+    expands the dataset to have one row per each integer onset-time, with the chord played at that time.
+
+    Args:
+        df_chords (Pandas.Dataframe): Source chords dataframe.
+
+    Returns:
+        Pandas.Dataframe: Expanded chords dataframe.
+    """
+
     # Rename columns to give them meaningful names
     df_chords_renamed = df_chords.rename(columns={
         0: 'onset_time',
@@ -164,6 +186,17 @@ def process_chords_df(df_chords):
     return expanded_df
 
 def prepare_dataset(dataset_path, train_test_split=0.8):
+    """
+    Split the dataset into datapoints by their phrase number (each phrase is one datapoint).
+    Each datapoint is a Python dictionary containing source and target values as Pytorch tensors.
+
+    Args:
+        dataset_path (str): Path to the (previously processed) dataset.
+
+    Returns:
+        data_train, data_test (list, list): Dataset split into train and test.
+    """
+
     data_train = []
     data_test = []
     num_dirs = len(os.listdir(dataset_path))
@@ -220,6 +253,14 @@ def prepare_dataset(dataset_path, train_test_split=0.8):
 
 
 def process_dataset(dataset_path):
+    """
+    Process the dataset using process_notes_df() and process_chords_df() functions.
+    Saves the result of the processing in an output directory.
+
+    Args:
+        dataset_path (str): Path to the unprocessed dataset.
+    """
+
     for dir in os.listdir(dataset_path):
         if not os.path.isdir(os.path.join(dataset_path, dir)):
             continue

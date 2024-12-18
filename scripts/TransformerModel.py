@@ -1,6 +1,3 @@
-import pandas as pd
-import numpy as np
-
 import torch
 import torch.nn as nn
 from torch.nn import Transformer
@@ -25,6 +22,10 @@ chord_vocab_sizes = {
 }
 
 class SinusoidalPositionalEncoding(nn.Module):
+    """
+    Class which calculates positional embeddings of music events by their onset times.
+    """
+
     # This StackOverflow answer was used as reference for this class: https://stackoverflow.com/a/77445896/21102779
     def __init__(self, d_model, max_time=10000):
         super(SinusoidalPositionalEncoding, self).__init__()
@@ -57,6 +58,16 @@ class SonataDataset(Dataset):
 
 
 def collate_fn(batch):
+    """
+    Function to pad the sequences in a batch to the same length.
+
+    Args:
+        batch (list): List of dictionaries
+    
+    Returns:
+        dict: Dictionary with the padded sequences
+    """
+
     src_notes = [item['src_notes'] for item in batch]
     src_onsets = [item['src_onsets'] for item in batch]
     tgt_chords = [item['tgt_chords'] for item in batch]
@@ -77,6 +88,9 @@ def collate_fn(batch):
 
 
 class HarmonizerTransformer(nn.Module):
+    """
+    Class which defines the transformer model for harmonization.
+    """
     def __init__(self, 
                  midi_vocab_size, 
                  chord_vocab_sizes, 
@@ -157,6 +171,21 @@ class HarmonizerTransformer(nn.Module):
 
 
 def train_model(model, dataloader, chord_vocab_sizes, num_epochs=10, learning_rate=0.001, device='cuda'):
+    """
+    Function to train the transformer model.
+
+    Args:
+        model (HarmonizerTransformer): The transformer model
+        dataloader (DataLoader): DataLoader object with the dataset
+        chord_vocab_sizes (dict): Dictionary with the sizes of the chord vocabularies
+        num_epochs (int): Number of epochs (default: 10)
+        learning_rate (float): Learning rate (default: 0.001)
+        device (str): Device to use ('cpu' or 'cuda') (default: 'cuda')
+
+    Returns:
+        HarmonizerTransformer: Trained transformer model
+    """
+
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -214,6 +243,17 @@ def train_model(model, dataloader, chord_vocab_sizes, num_epochs=10, learning_ra
     return model
 
 def test_model(model, dataloader, chord_vocab_sizes):
+    """
+    Function to test the transformer model.
+
+    Args:
+        model (HarmonizerTransformer): The transformer model
+        dataloader (DataLoader): DataLoader object with the dataset
+        chord_vocab_sizes (dict): Dictionary with the sizes of the chord vocabularies
+    
+    Returns:
+        float: Accuracy of the model
+    """
     model.eval()
     correct_predictions = 0
     total_predictions = 0
