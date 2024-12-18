@@ -53,3 +53,31 @@ In case this dataset proves not to be sufficient for training such a model, othe
     - A comprehensive report of the model creation and its results will be created.
 6. Preparing the presentation of the work - 4 hours
     - Creating a presentation of all the results.
+
+# Milestone 2 Deliverables
+
+## Error metric
+
+Cross-Entropy Loss was used as the model's metric. It calculates the difference between the predicted probability distribution and the true class for each chord property, and sums them all up. This metric was minimized during training.
+
+Since four loss values were summed up in each of its calculations, it would be larger than usual, which is why I aimed for a loss at around 1.
+
+However, I didn't achieve this loss, and was only able to go down to ~4.5.
+
+Accuracy was also taken into account, and the highest accuracy achieved on the test set was 61.3%.
+
+## Actual Time Spent On Each Part (to the nearest 1-2 hours)
+
+1. Dataset preparation and preprocessing - 15 hours
+    - This part includes acquiring the dataset, analyzing the data, and doing the necessary preprocessing to make it usable in deep learning models.
+2. Model design and selection - 20 hours
+    - This is an iterative process in which different model architectures will be tested and evaluated. After an analysis of the different designs, one of the models will be chosen for fine-tuning.
+3. Model training and fine-tuning - 5 hours
+    - During this step, the selected architecture will be trained on the data and the model hyperparameters will be fine-tuned. The result will be a trained model accompanied by performance metrics gathered from the test dataset.
+4. Building an application to present the results - ? hours
+    - An interactive application will be created, allowing users to input their own melodies and receive the harmonized version.
+5. Writing the final report - ? hours
+    - A comprehensive report of the model creation and its results will be created.
+6. Preparing the presentation of the work - ? hours
+    - Creating a presentation of all the results.
+
