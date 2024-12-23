@@ -5,25 +5,29 @@ from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence
 
+import numpy as np
+
 from tqdm import tqdm
 
-import os
 import math
 
 from ProcessDataset import chord_key_to_int, scale_degree_to_int, chord_quality_to_int, process_dataset, prepare_dataset
 
 
+device="cuda" if torch.cuda.is_available() else "cpu"
+print("Device:", device)
+
 midi_vocab_size = 128
 chord_vocab_sizes = {
-    'key': len(chord_key_to_int),
-    'degree': len(scale_degree_to_int),
-    'quality': len(chord_quality_to_int),
-    'inversion': 4    # 4 possible chord inversions (Root, 1st, 2nd, 3rd)
+    'key': len(chord_key_to_int)+1,
+    'degree': len(scale_degree_to_int)+1,
+    'quality': len(chord_quality_to_int)+1,
+    'inversion': 4+1    # 4 possible chord inversions (Root, 1st, 2nd, 3rd)
 }
 
 class SinusoidalPositionalEncoding(nn.Module):
     """
-    Class which calculates positional embeddings of music events by their onset times.
+    Class used to calculate positional embeddings of music events by their onset times.
     """
 
     # This StackOverflow answer was used as reference for this class: https://stackoverflow.com/a/77445896/21102779
@@ -35,9 +39,9 @@ class SinusoidalPositionalEncoding(nn.Module):
     def forward(self, onset_times):
         batch_size, seq_len = onset_times.size()
 
-        positions = onset_times.unsqueeze(-1)
+        positions = onset_times.unsqueeze(-1).to(device)
 
-        div_term = torch.exp( torch.arange(0, self.d_model, 2, dtype=torch.float32) *  (-math.log(self.max_time) / self.d_model))
+        div_term = torch.exp( torch.arange(0, self.d_model, 2, dtype=torch.float32) *  (-math.log(self.max_time) / self.d_model)).to(device)
 
         embeddings = torch.zeros(batch_size, seq_len, self.d_model)
         embeddings[:, :, 0::2] = torch.sin(positions * div_term)
@@ -47,6 +51,10 @@ class SinusoidalPositionalEncoding(nn.Module):
 
 
 class SonataDataset(Dataset):
+    """
+    Class which wraps the torch.utils.data.Dataset class. 
+    Defines methods for initializing and getting elements of the sonata dataset.
+    """
     def __init__(self, data):
         self.data = data
 
@@ -63,7 +71,7 @@ def collate_fn(batch):
 
     Args:
         batch (list): List of dictionaries
-    
+
     Returns:
         dict: Dictionary with the padded sequences
     """
@@ -91,13 +99,13 @@ class HarmonizerTransformer(nn.Module):
     """
     Class which defines the transformer model for harmonization.
     """
-    def __init__(self, 
-                 midi_vocab_size, 
-                 chord_vocab_sizes, 
-                 d_model=256, 
+    def __init__(self,
+                 midi_vocab_size,
+                 chord_vocab_sizes,
+                 d_model=256,
                  dropout=0.1,
-                 nhead=8, 
-                 num_encoder_layers=6, 
+                 nhead=8,
+                 num_encoder_layers=6,
                  num_decoder_layers=6):
         super(HarmonizerTransformer, self).__init__()
 
@@ -134,10 +142,10 @@ class HarmonizerTransformer(nn.Module):
         self.quality_head = nn.Linear(d_model, chord_vocab_sizes['quality'])
         self.inversion_head = nn.Linear(d_model, chord_vocab_sizes['inversion'])
 
-    def forward(self, src_notes, src_onset_times, tgt_chords, tgt_onset_times):
+    def forward(self, src_notes, src_onset_times, tgt_chords, tgt_onset_times, tgt_mask=None, src_pad_mask=None, tgt_pad_mask=None):
         # Embed the midi notes
-        src_notes_embeddings = self.midi_embedding(src_notes)
-        src_positional_encodings = self.positional_encoding(src_onset_times)
+        src_notes_embeddings = self.midi_embedding(src_notes).to(device)
+        src_positional_encodings = self.positional_encoding(src_onset_times).to(device)
         src = src_notes_embeddings + src_positional_encodings
 
         # Embed the target chords (each separately)
@@ -148,18 +156,16 @@ class HarmonizerTransformer(nn.Module):
 
         # Combine the chord embeddings
         tgt_emb = key_emb + degree_emb + quality_emb + inversion_emb
-        tgt_onset_emb = self.positional_encoding(tgt_onset_times)
+        tgt_emb = tgt_emb.to(device)
+        tgt_onset_emb = self.positional_encoding(tgt_onset_times).to(device)
         tgt = tgt_emb + tgt_onset_emb
 
         # Permute the values to have the shape (seq_len, batch_size, d_model)
         src = src.permute(1, 0, 2)
         tgt = tgt.permute(1, 0, 2)
 
-        # Pass the midi embeddings through the encoder to get the memory
-        memory = self.transformer.encoder(src)
-
         # Pass the target embeddings through the decoder to get the transformer's output
-        output = self.transformer.decoder(tgt, memory)
+        output = self.transformer(src, tgt, tgt_mask=tgt_mask)
 
         # Get the output for each head
         key = self.key_head(output)
@@ -168,6 +174,27 @@ class HarmonizerTransformer(nn.Module):
         inversion = self.inversion_head(output)
 
         return key, degree, quality, inversion
+
+    def get_tgt_mask(self, size) -> torch.tensor:
+        # Generates a squeare matrix where the each row allows one word more to be seen
+        mask = torch.tril(torch.ones(size, size) == 1) # Lower triangular matrix
+        mask = mask.float()
+        mask = mask.masked_fill(mask == 0, float('-inf')) # Convert zeros to -inf
+        mask = mask.masked_fill(mask == 1, float(0.0)) # Convert ones to 0
+
+        # EX for size=5:
+        # [[0., -inf, -inf, -inf, -inf],
+        #  [0.,   0., -inf, -inf, -inf],
+        #  [0.,   0.,   0., -inf, -inf],
+        #  [0.,   0.,   0.,   0., -inf],
+        #  [0.,   0.,   0.,   0.,   0.]]
+
+        return mask
+
+    def create_pad_mask(self, matrix: torch.tensor, pad_token: int) -> torch.tensor:
+        # If matrix = [1,2,3,0,0,0] where pad_token=0, the result mask is
+        # [False, False, False, True, True, True]
+        return (matrix == pad_token)
 
 
 def train_model(model, dataloader, chord_vocab_sizes, num_epochs=10, learning_rate=0.001, device='cuda'):
@@ -199,18 +226,29 @@ def train_model(model, dataloader, chord_vocab_sizes, num_epochs=10, learning_ra
         epoch_loss = 0
 
         for batch in tqdm(dataloader, desc=f"Epoch {epoch + 1}/{num_epochs}"):
+            optimizer.zero_grad()
+
             src_notes = batch['src_notes'].to(device)
             src_onsets = batch['src_onsets'].to(device)
             tgt_chords = batch['tgt_chords'].to(device)
             tgt_onsets = batch['tgt_onsets'].to(device)
 
-            tgt_key = tgt_chords[:, :, 0]
-            tgt_degree = tgt_chords[:, :, 1]
-            tgt_quality = tgt_chords[:, :, 2]
-            tgt_inversion = tgt_chords[:, :, 3]
+            tgt_chords_in = tgt_chords[:, :-1, :]
+            tgt_chords_out = tgt_chords[:, 1:, :]
+
+            tgt_onsets_in = tgt_onsets[:, :-1]
+            tgt_onsets_out = tgt_onsets[:, 1:] # Redundant
+
+            tgt_key = tgt_chords_out[:, :, 0]
+            tgt_degree = tgt_chords_out[:, :, 1]
+            tgt_quality = tgt_chords_out[:, :, 2]
+            tgt_inversion = tgt_chords_out[:, :, 3]
+
+            seq_len = tgt_chords_in.size(1)
+            tgt_mask = model.get_tgt_mask(seq_len).to(device)
 
             # Forward pass
-            key_pred, degree_pred, quality_pred, inversion_pred = model(src_notes, src_onsets, tgt_chords, tgt_onsets)
+            key_pred, degree_pred, quality_pred, inversion_pred = model(src_notes, src_onsets, tgt_chords_in, tgt_onsets_in, tgt_mask=tgt_mask)
 
             # Reshape predictions and targets to compute the loss
             key_pred = key_pred.view(-1, chord_vocab_sizes['key'])  # (batch_size * seq_len, vocab_size)
@@ -218,10 +256,10 @@ def train_model(model, dataloader, chord_vocab_sizes, num_epochs=10, learning_ra
             quality_pred = quality_pred.view(-1, chord_vocab_sizes['quality'])
             inversion_pred = inversion_pred.view(-1, chord_vocab_sizes['inversion'])
 
-            tgt_key = tgt_key.view(-1)  # (batch_size * seq_len)
-            tgt_degree = tgt_degree.view(-1)
-            tgt_quality = tgt_quality.view(-1)
-            tgt_inversion = tgt_inversion.view(-1)
+            tgt_key = tgt_key.reshape(-1)  # (batch_size * seq_len)
+            tgt_degree = tgt_degree.reshape(-1)
+            tgt_quality = tgt_quality.reshape(-1)
+            tgt_inversion = tgt_inversion.reshape(-1)
 
             # Compute the loss for each output head
             loss_key = criterion(key_pred, tgt_key)
@@ -250,55 +288,75 @@ def test_model(model, dataloader, chord_vocab_sizes):
         model (HarmonizerTransformer): The transformer model
         dataloader (DataLoader): DataLoader object with the dataset
         chord_vocab_sizes (dict): Dictionary with the sizes of the chord vocabularies
-    
+
     Returns:
         float: Accuracy of the model
     """
     model.eval()
-    correct_predictions = 0
+    correct_predictions_key = 0
+    correct_predictions_degree = 0
+    correct_predictions_quality = 0
+    correct_predictions_inversion = 0
     total_predictions = 0
 
     for batch in tqdm(dataloader, desc="Testing"):
         src_notes = batch['src_notes'].to("cuda" if torch.cuda.is_available() else "cpu")
         src_onsets = batch['src_onsets'].to("cuda" if torch.cuda.is_available() else "cpu")
-        tgt_chords = batch['tgt_chords'].to("cuda" if torch.cuda.is_available() else "cpu")
-        tgt_onsets = batch['tgt_onsets'].to("cuda" if torch.cuda.is_available() else "cpu")
+        tgt_chords_true = batch['tgt_chords'].to("cuda" if torch.cuda.is_available() else "cpu")
+        tgt_onsets_true = batch['tgt_onsets'].to("cuda" if torch.cuda.is_available() else "cpu")
 
-        tgt_key = tgt_chords[:, :, 0]
-        tgt_degree = tgt_chords[:, :, 1]
-        tgt_quality = tgt_chords[:, :, 2]
-        tgt_inversion = tgt_chords[:, :, 3]
+        tgt_key_true = tgt_chords_true[:, :, 0]
+        tgt_degree_true = tgt_chords_true[:, :, 1]
+        tgt_quality_true = tgt_chords_true[:, :, 2]
+        tgt_inversion_true = tgt_chords_true[:, :, 3]
 
-        # Forward pass
-        key_pred, degree_pred, quality_pred, inversion_pred = model(src_notes, src_onsets, tgt_chords, tgt_onsets)
+        key_pred = [0 for i in range(src_onsets.size(1)+1)]
+        degree_pred = [0 for i in range(src_onsets.size(1)+1)]
+        quality_pred = [0 for i in range(src_onsets.size(1)+1)]
+        inversion_pred = [0 for i in range(src_onsets.size(1)+1)]
+        # Combine tgt_key_pred, tgt_degree_pred, tgt_quality_pred, tgt_inversion_pred into a tensor of shape (batch_size, seq_len, 4) and convert all zeros to int
+        tgt_chords_pred = torch.zeros((tgt_chords_true.size(0), tgt_chords_true.size(1), 4)).to("cuda" if torch.cuda.is_available() else "cpu")
+        tgt_chords_pred = tgt_chords_pred.long()
 
-        key_pred = key_pred.view(-1, chord_vocab_sizes['key'])  # (batch_size * seq_len, vocab_size)
-        degree_pred = degree_pred.view(-1, chord_vocab_sizes['degree'])
-        quality_pred = quality_pred.view(-1, chord_vocab_sizes['quality'])
-        inversion_pred = inversion_pred.view(-1, chord_vocab_sizes['inversion'])
+        # Autoregressive inference
+        for i in range(src_onsets.size(1)+1):
+            key_pred, degree_pred, quality_pred, inversion_pred = model(src_notes, src_onsets, tgt_chords_pred, tgt_onsets_true)
 
-        tgt_key = tgt_key.view(-1)  # (batch_size * seq_len)
-        tgt_degree = tgt_degree.view(-1)
-        tgt_quality = tgt_quality.view(-1)
-        tgt_inversion = tgt_inversion.view(-1)
+            key_pred = torch.from_numpy(np.argmax(key_pred.detach().cpu().numpy(), axis=-1)).permute(1, 0).to(device)
+            degree_pred = torch.from_numpy(np.argmax(degree_pred.detach().cpu().numpy(), axis=-1)).permute(1, 0).to(device)
+            quality_pred = torch.from_numpy(np.argmax(quality_pred.detach().cpu().numpy(), axis=-1)).permute(1, 0).to(device)
+            inversion_pred = torch.from_numpy(np.argmax(inversion_pred.detach().cpu().numpy(), axis=-1)).permute(1, 0).to(device)
 
-        key_pred = torch.argmax(key_pred, dim=-1)
-        degree_pred = torch.argmax(degree_pred, dim=-1)
-        quality_pred = torch.argmax(quality_pred, dim=-1)
-        inversion_pred = torch.argmax(inversion_pred, dim=-1)
+            # Combine tgt_key_pred, tgt_degree_pred, tgt_quality_pred, tgt_inversion_pred into a tensor of shape (batch_size, seq_len, 4)
+            tgt_chords_pred[:, :, 0] = key_pred
+            tgt_chords_pred[:, :, 1] = degree_pred
+            tgt_chords_pred[:, :, 2] = quality_pred
+            tgt_chords_pred[:, :, 3] = inversion_pred
 
-        correct_predictions += torch.sum(key_pred == tgt_key).item()
-        correct_predictions += torch.sum(degree_pred == tgt_degree).item()
-        correct_predictions += torch.sum(quality_pred == tgt_quality).item()
-        correct_predictions += torch.sum(inversion_pred == tgt_inversion).item()
+        # Compute the accuracy of each output head
+        correct_predictions_key += torch.sum(tgt_key_true == key_pred).item()
+        correct_predictions_degree += torch.sum(tgt_degree_true == degree_pred).item()
+        correct_predictions_quality += torch.sum(tgt_quality_true == quality_pred).item()
+        correct_predictions_inversion += torch.sum(tgt_inversion_true == inversion_pred).item()
 
-        total_predictions += tgt_key.numel() + tgt_degree.numel() + tgt_quality.numel() + tgt_inversion.numel()
+        total_predictions += tgt_key_true.numel()
 
-    accuracy = correct_predictions / total_predictions
-    return accuracy
+    # Compute the accuracy
+    accuracy_key = correct_predictions_key / total_predictions
+    accuracy_degree = correct_predictions_degree / total_predictions
+    accuracy_quality = correct_predictions_quality / total_predictions
+    accuracy_inversion = correct_predictions_inversion / total_predictions
+
+    print(f"Accuracy key: {accuracy_key}, Accuracy degree: {accuracy_degree}, Accuracy quality: {accuracy_quality}, Accuracy inversion: {accuracy_inversion}")
+
+    return (accuracy_key + accuracy_degree + accuracy_quality + accuracy_inversion) / 4
 
 
 def hyperparameter_search():
+    """
+    Function which contains code for hyperparameter search.
+    """
+
     # Define the hyperparameters to search
     hyperparameters = {
         'd_model': [128, 256, 512],
@@ -355,24 +413,33 @@ def hyperparameter_search():
 
 
 def main():
-    model = HarmonizerTransformer(midi_vocab_size, chord_vocab_sizes)
-
     # Load the dataset
     dataset_path = 'data/processed'
     train_test_split = 0.8
     data_train, data_test = prepare_dataset(dataset_path, train_test_split)
 
     dataset_train = SonataDataset(data_train)
+    dataloader_train = DataLoader(dataset_train, batch_size=8, shuffle=True, collate_fn=collate_fn)
+
+    # Perform hyperparameter search
+    """
+    best_hyperparameters, best_accuracy = hyperparameter_search()
+    print(f"Best hyperparameters: {best_hyperparameters}, Best accuracy: {best_accuracy}")
+    d_model = best_hyperparameters['d_model']
+    nhead = best_hyperparameters['nhead']
+    num_encoder_layers = best_hyperparameters['num_encoder_layers']
+    num_decoder_layers = best_hyperparameters['num_decoder_layers']
+    learning_rate = best_hyperparameters['learning_rate']
+    """
 
     # Train the model
     model = HarmonizerTransformer(midi_vocab_size, chord_vocab_sizes)
-    dataloader_train = DataLoader(dataset_train, batch_size=8, shuffle=True, collate_fn=collate_fn)
 
     trained_model = train_model(
         model=model,
         dataloader=dataloader_train,
         chord_vocab_sizes=chord_vocab_sizes,
-        num_epochs=5,
+        num_epochs=1,
         learning_rate=0.001,
         device="cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -385,7 +452,7 @@ def main():
     print(f"Test set accuracy: {accuracy}")
 
     # Save the model
-    torch.save(trained_model.state_dict(), 'harmonizer_transformer.pth')
+    #torch.save(trained_model.state_dict(), 'harmonizer_transformer.pth')
 
 
 if __name__ == "__main__":

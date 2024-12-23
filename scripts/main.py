@@ -1,5 +1,5 @@
 from ProcessDataset import process_dataset, prepare_dataset
-from TransformerModel import HarmonizerTransformer, collate_fn, midi_vocab_size, chord_vocab_sizes, SonataDataset, train_model, test_model
+from TransformerModel import HarmonizerTransformer, collate_fn, midi_vocab_size, chord_vocab_sizes, SonataDataset, train_model, test_model, hyperparameter_search
 
 from torch.utils.data import DataLoader
 import torch
@@ -7,7 +7,10 @@ import torch
 import datetime
 
 
+device="cuda" if torch.cuda.is_available() else "cpu"
+print("Device:", device)
 EPOCHS = 5
+
 
 def main():
     print("Processing dataset started...")
@@ -27,6 +30,19 @@ def main():
 
     dataloader_train = DataLoader(dataset_train, batch_size=8, shuffle=True, collate_fn=collate_fn)
     dataloader_test = DataLoader(dataset_test, batch_size=8, shuffle=False, collate_fn=collate_fn)
+
+    # Perform hyperparameter search
+    """
+    print("Beginning hyperparameter search...\n")
+    best_hyperparameters, best_accuracy = hyperparameter_search()
+    print(f"Best hyperparameters: {best_hyperparameters}, Best accuracy: {best_accuracy}")
+    d_model = best_hyperparameters['d_model']
+    nhead = best_hyperparameters['nhead']
+    num_encoder_layers = best_hyperparameters['num_encoder_layers']
+    num_decoder_layers = best_hyperparameters['num_decoder_layers']
+    learning_rate = best_hyperparameters['learning_rate']
+    print("\nHyperparameter search ended.")
+    """
 
     # Initialize the model
     model = HarmonizerTransformer(midi_vocab_size, chord_vocab_sizes)

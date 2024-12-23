@@ -5,16 +5,16 @@ import shutil
 
 
 chord_quality_to_int = {
-    'M': 0,
-    'm': 1,
-    'M7': 2,
-    'm7': 3,
-    'D7': 4,
-    'a': 5,
-    'a6': 6,
-    'd': 7,
-    'd7': 8,
-    'h7': 9
+    'M': 1,
+    'm': 2,
+    'M7': 3,
+    'm7': 4,
+    'D7': 5,
+    'a': 6,
+    'a6': 7,
+    'd': 8,
+    'd7': 9,
+    'h7': 10
 }
 
 scale_degree_to_int = {
@@ -178,7 +178,7 @@ def process_chords_df(df_chords):
                 "key": chord_key_to_int[row["key"]],
                 "degree": scale_degree_to_int[str(degree)],
                 "quality": chord_quality_to_int[row["quality"]],
-                "inversion": int(row["inversion"]),
+                "inversion": int(row["inversion"])+1,
                 "roman_numeral_notation": row["roman_numeral_notation"]
             })
     
