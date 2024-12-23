@@ -56,21 +56,61 @@ In case this dataset proves not to be sufficient for training such a model, othe
 
 # Milestone 2 Deliverables
 
+## Task and approach
+
+For this task, I decided to use a transformer achitecture, given its power working with generative models and sequential data.
+
+The transfomer gets, as its input, a series of notes and their onset times, and outputs four values for each possible onset time:
+- Chord key (e.g. C, e, f#),
+- Chord degree (e.g., I, IV, V),
+- Chord quality (e.g., major, minor, diminished),
+- Chord inversion (1st, 2nd, 3rd, 4th).
+
+## Repository structure
+
+The repository consists of three main directories:
+
+- data - containing the source dataset (data/functional-harmony) and the processed dataset (data/processed).
+- saved_models - containing the models saved after training.
+- scripts - containing all scripts for data processing, defining, training and testing the model, and running tests of the code's functionality.
+
+## Data processing
+
+The original dataset was split into smaller datapoints, each consisting of one musical phrase (about 20 to 40 onset times each). There were a total of 1994 phrases.
+
+The train/test split was 80%.
+
+## Model training
+
+The model was trained over 20 epochs after a hyperparameter search was performed. After training the model was tested on a separate test dataset. 
+
 ## Error metric
 
 Cross-Entropy Loss was used as the model's metric. It calculates the difference between the predicted probability distribution and the true class for each chord property, and sums them all up. This metric was minimized during training.
 
-Since four loss values were summed up in each of its calculations, it would be larger than usual, which is why I aimed for a loss at around 1.
+As a more interpretable measure, accuracy was used to measure the model's performance after training.
+Five accuracy measures were calculated:
+- Chord key accuracy,
+- Chord degree accuracy,
+- Chord quality accuracy,
+- Chord inversion accuracy, and
+- Mean accuracy of the above four measures.
 
-However, I didn't achieve this loss, and was only able to go down to ~4.5.
+Since harmonization is a very subjective task, I approximated that an accuracy of around 80% could be considered very successful, given all possible variations of chords that could be considered correct.
 
-Accuracy was also taken into account, and the highest accuracy achieved on the test set was 61.3%.
+Accuracies of around 50% (+-3%) were achieved after training. This can be attributed to insufficient training data, since transformer models generally need a lot of data to detect patterns.
 
-## Actual Time Spent On Each Part (to the nearest 1-2 hours)
+## Tests
+
+The repository contains two test scripts: ProcessDatasetTests.py and TransformerModelTests.py which test the functionality of most of the (significant) methods and classes.
+
+The tests are done by running the scripts.
+
+## Actual Time Spent On Each Part (approximated to the nearest several hours)
 
 1. Dataset preparation and preprocessing - 15 hours
     - This part includes acquiring the dataset, analyzing the data, and doing the necessary preprocessing to make it usable in deep learning models.
-2. Model design and selection - 20 hours
+2. Model design and selection - 50 hours
     - This is an iterative process in which different model architectures will be tested and evaluated. After an analysis of the different designs, one of the models will be chosen for fine-tuning.
 3. Model training and fine-tuning - 5 hours
     - During this step, the selected architecture will be trained on the data and the model hyperparameters will be fine-tuned. The result will be a trained model accompanied by performance metrics gathered from the test dataset.
