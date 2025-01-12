@@ -1,0 +1,46 @@
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+}
+
+#recordButton {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background-color: #ff4757;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+#recordButton::before {
+    content: '';
+    display: block;
+    width: 0;
+    height: 0;
+    border-style: solid;
+}
+
+#recordButton.play::before {
+    border-width: 15px 0 15px 25px; /* Triangle (Play Icon) */
+    border-color: transparent transparent transparent white;
+}
+
+#recordButton.stop::before {
+    width: 30px;
+    height: 30px;
+    background-color: white; /* Square (Stop Icon) */
+    border: none;
+    content: '';
+    border-radius: 4px;
+}
