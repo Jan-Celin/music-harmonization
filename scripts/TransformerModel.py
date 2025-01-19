@@ -11,10 +11,10 @@ from tqdm import tqdm
 
 import math
 
-from ProcessDataset import chord_key_to_int, scale_degree_to_int, chord_quality_to_int, process_dataset, prepare_dataset
+from .ProcessDataset import chord_key_to_int, scale_degree_to_int, chord_quality_to_int, process_dataset, prepare_dataset
 
 
-device="cuda" if torch.cuda.is_available() else "cpu"
+device="cpu"
 print("Device:", device)
 
 midi_vocab_size = 128
@@ -144,15 +144,15 @@ class HarmonizerTransformer(nn.Module):
 
     def forward(self, src_notes, src_onset_times, tgt_chords, tgt_onset_times, tgt_mask=None, src_pad_mask=None, tgt_pad_mask=None):
         # Embed the midi notes
-        src_notes_embeddings = self.midi_embedding(src_notes).to(device)
+        src_notes_embeddings = self.midi_embedding(src_notes.cpu().long()).to(device)
         src_positional_encodings = self.positional_encoding(src_onset_times).to(device)
         src = src_notes_embeddings + src_positional_encodings
 
         # Embed the target chords (each separately)
-        key_emb = self.key_embedding(tgt_chords[:, :, 0])
-        degree_emb = self.degree_embedding(tgt_chords[:, :, 1])
-        quality_emb = self.quality_embedding(tgt_chords[:, :, 2])
-        inversion_emb = self.inversion_embedding(tgt_chords[:, :, 3])
+        key_emb = self.key_embedding(tgt_chords[:, :, 0].to(device))
+        degree_emb = self.degree_embedding(tgt_chords[:, :, 1].to(device))
+        quality_emb = self.quality_embedding(tgt_chords[:, :, 2].to(device))
+        inversion_emb = self.inversion_embedding(tgt_chords[:, :, 3].to(device))
 
         # Combine the chord embeddings
         tgt_emb = key_emb + degree_emb + quality_emb + inversion_emb
@@ -165,7 +165,7 @@ class HarmonizerTransformer(nn.Module):
         tgt = tgt.permute(1, 0, 2)
 
         # Pass the target embeddings through the decoder to get the transformer's output
-        output = self.transformer(src, tgt, tgt_mask=tgt_mask)
+        output = self.transformer(src.to(device), tgt.to(device), tgt_mask=tgt_mask)
 
         # Get the output for each head
         key = self.key_head(output)
@@ -196,6 +196,58 @@ class HarmonizerTransformer(nn.Module):
         # [False, False, False, True, True, True]
         return (matrix == pad_token)
 
+    def harmonize(self, onsets, pitches):
+        """
+        Function to harmonize a melody given the onset times and pitches.
+
+        Args:
+            onsets (list): List of onset times
+            pitches (list): List of pitches
+
+        Returns:
+            list: dictionary with the harmony values (key, degree, quality, inversion)
+        """
+
+        # Convert the input melody to tensors
+        onsets = torch.tensor(onsets).unsqueeze(0).to(device)
+        pitches = torch.tensor(pitches).unsqueeze(0).to(device)
+
+        # Generate the positional encodings
+        key_pred = [0 for i in range(onsets.size(1))]
+        degree_pred = [0 for i in range(onsets.size(1))]
+        quality_pred = [0 for i in range(onsets.size(1))]
+        inversion_pred = [0 for i in range(onsets.size(1))]
+
+        # Combine tgt_key_pred, tgt_degree_pred, tgt_quality_pred, tgt_inversion_pred into a tensor of shape (batch_size, seq_len, 4) and convert all zeros to int
+        tgt_chords_pred = torch.zeros((1, onsets.size(1), 4)).to(device)
+        tgt_chords_pred = tgt_chords_pred.long()
+
+        # Autoregressive inference
+        for i in range(onsets.size(1)+1):
+            key_pred, degree_pred, quality_pred, inversion_pred = self(onsets, pitches, tgt_chords_pred, onsets)
+
+            key_pred = torch.from_numpy(np.argmax(key_pred.detach().cpu().numpy(), axis=-1)).permute(1, 0).to(device)
+            degree_pred = torch.from_numpy(np.argmax(degree_pred.detach().cpu().numpy(), axis=-1)).permute(1, 0).to(device)
+            quality_pred = torch.from_numpy(np.argmax(quality_pred.detach().cpu().numpy(), axis=-1)).permute(1, 0).to(device)
+            inversion_pred = torch.from_numpy(np.argmax(inversion_pred.detach().cpu().numpy(), axis=-1)).permute(1, 0).to(device)
+
+            # Combine tgt_key_pred, tgt_degree_pred, tgt_quality_pred, tgt_inversion_pred into a tensor of shape (batch_size, seq_len, 4)
+            tgt_chords_pred[:, :, 0] = key_pred
+            tgt_chords_pred[:, :, 1] = degree_pred
+            tgt_chords_pred[:, :, 2] = quality_pred
+            tgt_chords_pred[:, :, 3] = inversion_pred
+
+        harmonies = []
+        for i in range(onsets.size(1)):
+            harmony = {
+                'onset': onsets[0, i].item(),
+                'key': tgt_chords_pred[0, i, 0].item(),
+                'degree': tgt_chords_pred[0, i, 1].item(),
+                'quality': tgt_chords_pred[0, i, 2].item(),
+                'inversion': tgt_chords_pred[0, i, 3].item()
+            }
+            harmonies.append(harmony)
+        return tgt_chords_pred
 
 def train_model(model, dataloader, chord_vocab_sizes, num_epochs=10, learning_rate=0.001, device='cuda'):
     """
@@ -305,10 +357,10 @@ def test_model(model, dataloader, chord_vocab_sizes):
         tgt_chords_true = batch['tgt_chords'].to("cuda" if torch.cuda.is_available() else "cpu")
         tgt_onsets_true = batch['tgt_onsets'].to("cuda" if torch.cuda.is_available() else "cpu")
 
-        tgt_key_true = tgt_chords_true[:, :, 0]
-        tgt_degree_true = tgt_chords_true[:, :, 1]
-        tgt_quality_true = tgt_chords_true[:, :, 2]
-        tgt_inversion_true = tgt_chords_true[:, :, 3]
+        tgt_key_true = tgt_chords_true[:, :, 0].to(device)
+        tgt_degree_true = tgt_chords_true[:, :, 1].to(device)
+        tgt_quality_true = tgt_chords_true[:, :, 2].to(device)
+        tgt_inversion_true = tgt_chords_true[:, :, 3].to(device)
 
         key_pred = [0 for i in range(src_onsets.size(1)+1)]
         degree_pred = [0 for i in range(src_onsets.size(1)+1)]
@@ -328,10 +380,10 @@ def test_model(model, dataloader, chord_vocab_sizes):
             inversion_pred = torch.from_numpy(np.argmax(inversion_pred.detach().cpu().numpy(), axis=-1)).permute(1, 0).to(device)
 
             # Combine tgt_key_pred, tgt_degree_pred, tgt_quality_pred, tgt_inversion_pred into a tensor of shape (batch_size, seq_len, 4)
-            tgt_chords_pred[:, :, 0] = key_pred
-            tgt_chords_pred[:, :, 1] = degree_pred
-            tgt_chords_pred[:, :, 2] = quality_pred
-            tgt_chords_pred[:, :, 3] = inversion_pred
+            tgt_chords_pred[:, :, 0] = key_pred.to(device)
+            tgt_chords_pred[:, :, 1] = degree_pred.to(device)
+            tgt_chords_pred[:, :, 2] = quality_pred.to(device)
+            tgt_chords_pred[:, :, 3] = inversion_pred.to(device)
 
         # Compute the accuracy of each output head
         correct_predictions_key += torch.sum(tgt_key_true == key_pred).item()
@@ -412,7 +464,7 @@ def hyperparameter_search():
     return best_hyperparameters, best_accuracy
 
 
-def main():
+def main_original():
     # Load the dataset
     dataset_path = 'data/processed'
     train_test_split = 0.8
@@ -453,6 +505,21 @@ def main():
 
     # Save the model
     #torch.save(trained_model.state_dict(), 'harmonizer_transformer.pth')
+
+
+def main():
+    model = HarmonizerTransformer(midi_vocab_size=midi_vocab_size, chord_vocab_sizes=chord_vocab_sizes)
+    model.load_state_dict(torch.load("saved_models/best_model.pth", map_location=torch.device('cpu')))
+    
+    dataset_path = 'data/processed'
+    train_test_split = 0.8
+    data_train, data_test = prepare_dataset(dataset_path, train_test_split)
+
+    # Test the model
+    dataset_test = SonataDataset(data_test)
+    dataloader_test = DataLoader(dataset_test, batch_size=8, shuffle=False, collate_fn=collate_fn)
+
+    accuracy = test_model(model, dataloader_test, chord_vocab_sizes)
 
 
 if __name__ == "__main__":
