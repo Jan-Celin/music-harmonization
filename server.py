@@ -30,7 +30,15 @@ def harmonize():
     }
 
     Returns:
+    Dict[str, List[int]]: The harmonized melody.
 
+    Example response:
+    {
+        "chord_keys": [0, 2, ...],
+        "chord_degrees": [0, 2, ...],
+        "chord_qualities": [0, 2, ...],
+        "chord_inversions": [0, 2, ...]
+    }
     """
     data = request.get_json()
 

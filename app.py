@@ -98,6 +98,10 @@ def play_midi(midi_path: str):
     st.write("### The harmonized chords are ready!")
     st.audio(virtualfile)
 
+
+
+        
+
 def extract_melody(audio_file):
     """
     Loads an audio file and extracts the melody using librosa.
@@ -143,12 +147,10 @@ if audio_value:
         model_output, midi_data, note_events = extract_melody("data/input.wav")
 
         # Send a request to the harmonize endpoint
-            
         note_events = [{"onset": float(note.start), "pitch": float(note.pitch)} for note in midi_data.instruments[0].notes]
         payload = {
             "note_events": note_events,
         }
-
         response = requests.post("http://localhost:1111/harmonize", json=payload).json()
 
         chords = []
