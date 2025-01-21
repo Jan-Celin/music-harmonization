@@ -172,7 +172,7 @@ if audio_value:
         try:
             play_midi(midi_path)
         except Exception as e:
-            st.write("An error occurred while playing the harmonized chords. The issues is most likely due to the fact that you do not have FluidSynth installed in your system PATH. You can still download the MIDI file with the harmonized chords below.")
+            st.write("An error occurred while playing the harmonized chords. The issue is most likely due to the fact that you do not have FluidSynth installed in your system PATH. You can still download the MIDI file with the harmonized chords below.")
         st.write("Download the midi file with the harmonized chords:")
         st.download_button("Download harmonized chords", midi_path, "chords.mid", "audio/midi")
 

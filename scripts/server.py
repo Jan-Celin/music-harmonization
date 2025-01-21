@@ -1,7 +1,7 @@
 import json
 from flask import Flask, request, render_template_string
 import torch
-from scripts.TransformerModel import HarmonizerTransformer, midi_vocab_size, chord_vocab_sizes 
+from TransformerModel import HarmonizerTransformer, midi_vocab_size, chord_vocab_sizes 
 
 app = Flask(__name__)
 

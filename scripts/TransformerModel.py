@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 import math
 
-from .ProcessDataset import chord_key_to_int, scale_degree_to_int, chord_quality_to_int, process_dataset, prepare_dataset
+from ProcessDataset import chord_key_to_int, scale_degree_to_int, chord_quality_to_int, process_dataset, prepare_dataset
 
 
 device="cpu"
