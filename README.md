@@ -31,6 +31,15 @@ To use the application, follow these steps:
 `streamlit run scripts/app.py`
 
 
+**Important Note!**
+
+The demo application uses FluidSynth for sound synthesis after chord creation. For it to work, it needs to be installed somewhere on the system PATH (on windows it should be in the C:\tools directory). If you do not want to install Fluidsynth, you can still run the application, however first you need to uninstall pyfluidsynth from your Python environment after completing step 3. from the above instructions:
+
+3.5. (optional): `pip uninstall pyfluidsynth`
+
+A download of the generated chords will still be possible, and they will be written in textual form on the website.
+
+
 ## Introduction and Motivation
 
 Melody harmonization is a large part of many composers' workflows. While melodies can stand on their own and sound beautiful, it's harmonies that give them character, context, and depth. Choosing harmonies is an artist's creative choice, however, creativity alone is not always enough. The process requires a good understanding of music theory and, often, a lot of trial and error, which can overwhelm composers, both novice and experienced. 
