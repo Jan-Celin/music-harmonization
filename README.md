@@ -1,5 +1,29 @@
 # Music Harmonizer - A Deep Learning Approach to Adding Chords to Melodies
 
+## App Startup Instructions
+
+1. Clone this repository.
+
+`git clone https://github.com/Jan-Celin/music-harmonization.git`
+
+2. Create a new Python environment (the recommended version is Python 3.10).
+
+`conda create -n music-harmonization python=3.10` \
+`conda activate music-harmonization`
+
+3. Install the requirements.
+
+`pip install -r requirements.txt`
+
+4. Run the server.
+
+`python scripts/server.py`
+
+5. In a separate terminal, run the Streamlit application.
+
+`streamlit run scripts/app.py`
+
+
 ## Introduction and Motivation
 
 Melody harmonization is a large part of many composers' workflows. While melodies can stand on their own and sound beautiful, it's harmonies that give them character, context, and depth. Choosing harmonies is an artist's creative choice, however, creativity alone is not always enough. The process requires a good understanding of music theory and, often, a lot of trial and error, which can overwhelm composers, both novice and experienced. 
