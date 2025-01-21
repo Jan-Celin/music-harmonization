@@ -1,6 +1,13 @@
 # Music Harmonizer - A Deep Learning Approach to Adding Chords to Melodies
 
-## App Startup Instructions
+## Demo App Instructions
+
+To showcase the model’s performance, a demo application was built using Python’s Flask library (for the backed API), and its Streamlit library (for the frontend). The application’s interface allows users to input the melody either by uploading a file or by playing the melody directly into their microphone. The application then extracts note events from the audio and sends them to an endpoint on the server, which then
+returns the resulting chords. The model inference is run entirely on the backend and is only accessed through the Flask API.
+
+After the chords are returned, the user is able to play back the chords in the browser and download the resulting midi file.
+
+To use the application, follow these steps:
 
 1. Clone this repository.
 
@@ -138,10 +145,10 @@ The tests are done by running the scripts.
     - This is an iterative process in which different model architectures will be tested and evaluated. After an analysis of the different designs, one of the models will be chosen for fine-tuning.
 3. Model training and fine-tuning - 5 hours
     - During this step, the selected architecture will be trained on the data and the model hyperparameters will be fine-tuned. The result will be a trained model accompanied by performance metrics gathered from the test dataset.
-4. Building an application to present the results - ? hours
+4. Building an application to present the results - 10 hours
     - An interactive application will be created, allowing users to input their own melodies and receive the harmonized version.
-5. Writing the final report - ? hours
+5. Writing the final report - 2 hours
     - A comprehensive report of the model creation and its results will be created.
-6. Preparing the presentation of the work - ? hours
+6. Preparing the presentation of the work - 8 hours
     - Creating a presentation of all the results.
 
